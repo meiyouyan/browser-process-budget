@@ -1,0 +1,10 @@
+# Bench scenario: light office browsing on RDS
+id = "office-basic"
+description = "Open a few public pages; measure process count after idle"
+browser = "chrome"
+urls = [
+  "https://example.com",
+  "https://www.wikipedia.org",
+  "https://www.bing.com",
+]
+idle_seconds = 30
