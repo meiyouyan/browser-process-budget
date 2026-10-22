@@ -395,7 +395,7 @@ mod windows_impl {
             if !cmd.is_empty() {
                 return cmd
                     .iter()
-                    .map(|s| s.to_string())
+                    .map(|s| s.to_string_lossy().into_owned())
                     .collect::<Vec<_>>()
                     .join(" ");
             }
