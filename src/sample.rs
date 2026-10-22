@@ -389,6 +389,13 @@ mod windows_impl {
     }
 
     fn command_line_for_pid(sys: &System, pid: u32, name: &str) -> String {
+        // Prefer ProcessCommandLineInformation (Win8.1+); sysinfo often returns
+        // empty argv for protected Chromium children on Server/RDS.
+        if let Some(cmd) = query_process_command_line(pid) {
+            if !cmd.trim().is_empty() {
+                return cmd;
+            }
+        }
         use sysinfo::Pid;
         if let Some(proc) = sys.process(Pid::from_u32(pid)) {
             let cmd = proc.cmd();
@@ -403,11 +410,63 @@ mod windows_impl {
                 return exe.to_string_lossy().into_owned();
             }
         }
-        // Fallback: image path via QueryFullProcessImageNameW
         if let Some(path) = query_image_name(pid) {
             return path;
         }
         name.to_string()
+    }
+
+    /// PROCESSINFOCLASS ProcessCommandLineInformation = 60
+    fn query_process_command_line(pid: u32) -> Option<String> {
+        #[repr(C)]
+        struct UnicodeString {
+            length: u16,
+            maximum_length: u16,
+            buffer: *const u16,
+        }
+
+        #[link(name = "ntdll")]
+        extern "system" {
+            fn NtQueryInformationProcess(
+                process_handle: isize,
+                process_information_class: u32,
+                process_information: *mut core::ffi::c_void,
+                process_information_length: u32,
+                return_length: *mut u32,
+            ) -> i32;
+        }
+
+        const PROCESS_COMMAND_LINE_INFORMATION: u32 = 60;
+        let access = PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_QUERY_INFORMATION | PROCESS_VM_READ;
+        let handle = unsafe { OpenProcess(access, false, pid) }.ok()?;
+        let handle_isize = handle.0 as isize;
+        let mut buf = vec![0u8; 8192];
+        let mut ret_len = 0u32;
+        let status = unsafe {
+            NtQueryInformationProcess(
+                handle_isize,
+                PROCESS_COMMAND_LINE_INFORMATION,
+                buf.as_mut_ptr() as *mut _,
+                buf.len() as u32,
+                &mut ret_len,
+            )
+        };
+        unsafe {
+            let _ = CloseHandle(handle);
+        }
+        if status < 0 {
+            return None;
+        }
+        if (ret_len as usize) < std::mem::size_of::<UnicodeString>() {
+            return None;
+        }
+        let us = unsafe { &*(buf.as_ptr() as *const UnicodeString) };
+        if us.buffer.is_null() || us.length == 0 {
+            return None;
+        }
+        let nchars = (us.length as usize) / 2;
+        let slice = unsafe { std::slice::from_raw_parts(us.buffer, nchars) };
+        Some(String::from_utf16_lossy(slice))
     }
 
     fn query_image_name(pid: u32) -> Option<String> {
