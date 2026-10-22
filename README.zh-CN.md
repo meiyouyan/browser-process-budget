@@ -10,9 +10,18 @@ English: [README.md](README.md).
 
 ## 状态
 
-仓库骨架 / 设计中。下一步实现 Windows 采样器。
+**v0.1 — Linux 上 classify/report 可用；Windows 采样器在 Windows 目标上编译，供 RDS 主机使用。**
 
-## CLI（规划）
+| 命令 | Linux（本机 / CI） | Windows RDS（主目标） |
+| --- | --- | --- |
+| `bpb classify` | 可用 | 可用 |
+| `bpb report` | 可用（JSON + Markdown，可选脱敏） | 可用 |
+| `bpb sample` | **仅冒烟**：通过 `/proc` 采集 google-chrome / chromium | 原生 Toolhelp + 工作集 + 会话 ID |
+| `bpb bench` | 加载 `scripts/*.toml`，空闲等待后 sample→classify→report（URL 启动跳过） | 同上 |
+
+Windows API 位于 `cfg(windows)`，Linux CI 不会跑到。生产数据请在 RDS 主机上执行 `bpb sample`。
+
+## CLI
 
 ```bash
 bpb sample --browser chrome --out sample.json
@@ -21,19 +30,36 @@ bpb report --input classified.json --out-dir ./out --redact
 bpb bench --scenario office-basic --browser chrome --out-dir ./out
 ```
 
+### 夹具冒烟（无需真实浏览器）
+
+```bash
+cargo build --release
+./target/release/bpb classify --input examples/sample-fixture.json --out /tmp/bpb-classified.json
+./target/release/bpb report --input /tmp/bpb-classified.json --out-dir /tmp/bpb-out --redact
+```
+
+### 可选：Linux 实机冒烟
+
+```bash
+bpb sample --browser chrome --out /tmp/sample.json
+bpb classify --input /tmp/sample.json --out /tmp/classified.json
+bpb report --input /tmp/classified.json --out-dir /tmp/bpb-live --redact
+```
+
 ## 目录
 
 ```
 src/           Rust CLI
 docs/zh|en/    架构与指南（中英）
 scripts/       基准场景
-examples/      脱敏示例报告
+examples/      示例夹具
 ```
 
 ## 目标环境
 
 - 主：Windows RDS + Chrome
 - 次：Edge
+- Linux 采样：仅冒烟 / 流水线测试
 - 文档：中英双语
 
 ## 许可证

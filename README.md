@@ -10,9 +10,18 @@ Site Isolation improves security but multiplies renderer processes. On RDS, thin
 
 ## Status
 
-Scaffold / v0.1 design. Sampler implementation is next.
+**v0.1 — usable pipeline on Linux for classify/report; Windows sampler compiles for RDS hosts.**
 
-## CLI (planned)
+| Command | Linux (this box / CI) | Windows RDS (primary) |
+| --- | --- | --- |
+| `bpb classify` | Works | Works |
+| `bpb report` | Works (JSON + Markdown, optional redact) | Works |
+| `bpb sample` | **Smoke only** via `/proc` (google-chrome / chromium) | Native Toolhelp + working set + session id |
+| `bpb bench` | Loads `scripts/*.toml`, idle sleep, then sample→classify→report (URL launch skipped) | Same |
+
+Windows APIs are behind `cfg(windows)` and are not exercised on Linux CI. Run `bpb sample` on the RDS host for production numbers.
+
+## CLI
 
 ```bash
 bpb sample --browser chrome --out sample.json
@@ -21,19 +30,37 @@ bpb report --input classified.json --out-dir ./out --redact
 bpb bench --scenario office-basic --browser chrome --out-dir ./out
 ```
 
+### Fixture smoke (no live browser required)
+
+```bash
+cargo build --release
+./target/release/bpb classify --input examples/sample-fixture.json --out /tmp/bpb-classified.json
+./target/release/bpb report --input /tmp/bpb-classified.json --out-dir /tmp/bpb-out --redact
+```
+
+### Live Linux smoke (optional)
+
+```bash
+# if Chrome is running:
+bpb sample --browser chrome --out /tmp/sample.json
+bpb classify --input /tmp/sample.json --out /tmp/classified.json
+bpb report --input /tmp/classified.json --out-dir /tmp/bpb-live --redact
+```
+
 ## Layout
 
 ```
-src/           Rust CLI (sample / classify / report / bench)
+src/           Rust CLI (sample / classify / report / bench / model)
 docs/en|zh/    Architecture & guides (bilingual)
 scripts/       Bench scenarios
-examples/      Sample reports (redacted)
+examples/      Sample fixtures (redacted-friendly)
 ```
 
 ## Target environment
 
 - Primary: Windows RDS + Google Chrome
 - Secondary: Microsoft Edge
+- Linux sample path: smoke / pipeline testing only
 - Docs: Chinese + English
 
 ## License

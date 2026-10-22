@@ -2,12 +2,13 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-mod sample;
-mod classify;
-mod report;
 mod bench;
+mod classify;
+mod model;
+mod report;
+mod sample;
 
-/// browser-process-budget (bpb) — measure Chromium process overhead on Windows.
+/// browser-process-budget (bpb) — measure Chromium process overhead (Windows RDS primary; Linux smoke sample supported).
 #[derive(Parser, Debug)]
 #[command(name = "bpb", version, about)]
 struct Cli {
@@ -25,7 +26,7 @@ enum Commands {
         /// Output path (JSON). Default: stdout
         #[arg(long)]
         out: Option<PathBuf>,
-        /// Include session id when available (RDS).
+        /// Include session id when available (RDS / Windows).
         #[arg(long, default_value_t = true)]
         session: bool,
     },
@@ -61,9 +62,11 @@ enum Commands {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Sample { browser, out, session } => {
-            sample::run(&browser, out.as_deref(), session)
-        }
+        Commands::Sample {
+            browser,
+            out,
+            session,
+        } => sample::run(&browser, out.as_deref(), session),
         Commands::Classify { input, out } => classify::run(&input, out.as_deref()),
         Commands::Report {
             input,

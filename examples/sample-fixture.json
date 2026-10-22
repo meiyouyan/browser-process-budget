@@ -1,0 +1,76 @@
+{
+  "version": "1",
+  "captured_at": "2026-10-22T04:00:00Z",
+  "host": {
+    "os": "windows",
+    "hostname": "RDS-HOST-01"
+  },
+  "browser": {
+    "family": "chrome",
+    "version": "141.0.7390.76"
+  },
+  "processes": [
+    {
+      "pid": 1000,
+      "ppid": 800,
+      "name": "chrome.exe",
+      "working_set_bytes": 120000000,
+      "private_bytes": 90000000,
+      "session_id": 2,
+      "command_line": "C:\\Users\\Alice\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe --prefetch:1"
+    },
+    {
+      "pid": 1001,
+      "ppid": 1000,
+      "name": "chrome.exe",
+      "working_set_bytes": 85000000,
+      "private_bytes": 70000000,
+      "session_id": 2,
+      "command_line": "C:\\Users\\Alice\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe --type=renderer --lang=en-US"
+    },
+    {
+      "pid": 1002,
+      "ppid": 1000,
+      "name": "chrome.exe",
+      "working_set_bytes": 72000000,
+      "private_bytes": 60000000,
+      "session_id": 2,
+      "command_line": "C:\\Users\\Alice\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe --type=renderer --extension-process"
+    },
+    {
+      "pid": 1003,
+      "ppid": 1000,
+      "name": "chrome.exe",
+      "working_set_bytes": 95000000,
+      "private_bytes": 80000000,
+      "session_id": 2,
+      "command_line": "C:\\Users\\Alice\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe --type=gpu-process"
+    },
+    {
+      "pid": 1004,
+      "ppid": 1000,
+      "name": "chrome.exe",
+      "working_set_bytes": 45000000,
+      "private_bytes": 30000000,
+      "session_id": 2,
+      "command_line": "C:\\Users\\Alice\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe --type=utility --utility-sub-type=network.mojom.NetworkService"
+    },
+    {
+      "pid": 1005,
+      "ppid": 1000,
+      "name": "chrome.exe",
+      "working_set_bytes": 40000000,
+      "private_bytes": 28000000,
+      "session_id": 2,
+      "command_line": "C:\\Users\\Alice\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe --type=utility --extensions.mojom.KeepAliveService"
+    },
+    {
+      "pid": 2000,
+      "ppid": 900,
+      "name": "notepad.exe",
+      "working_set_bytes": 8000000,
+      "session_id": 2,
+      "command_line": "notepad.exe C:\\Users\\Alice\\notes.txt"
+    }
+  ]
+}

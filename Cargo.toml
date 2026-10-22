@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "Measure and attribute Chromium-family browser process overhead on constrained Windows hosts (RDS, thin clients)."
 license = "MIT"
-repository = "https://github.com/EXAMPLE/browser-process-budget"
+repository = "https://github.com/meiyouyan/browser-process-budget"
 readme = "README.md"
 keywords = ["chrome", "rds", "windows", "process", "memory"]
 categories = ["command-line-utilities", "development-tools"]
@@ -15,14 +15,17 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
 chrono = { version = "0.4", features = ["serde"] }
+toml = "0.8"
+sysinfo = "0.33"
 
 [target.'cfg(windows)'.dependencies]
-# Windows process APIs (wire up in sample module)
 windows = { version = "0.58", features = [
   "Win32_Foundation",
   "Win32_System_ProcessStatus",
   "Win32_System_Threading",
   "Win32_System_SystemInformation",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_RemoteDesktop",
 ] }
 
 [[bin]]

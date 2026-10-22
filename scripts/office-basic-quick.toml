@@ -1,0 +1,5 @@
+id = "office-basic-quick"
+description = "Quick smoke bench (no URL launch)"
+browser = "chrome"
+urls = []
+idle_seconds = 0
