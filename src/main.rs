@@ -49,13 +49,16 @@ enum Commands {
     },
     /// Run a named office workload script then sample (requires scripts/).
     Bench {
-        /// Scenario id, e.g. office-basic
+        /// Scenario id, e.g. office-basic or office-basic-ab
         #[arg(long)]
         scenario: String,
         #[arg(long, default_value = "chrome")]
         browser: String,
         #[arg(long)]
         out_dir: PathBuf,
+        /// When the scenario defines multiple [[profiles]], run only this profile id.
+        #[arg(long)]
+        profile: Option<String>,
     },
 }
 
@@ -77,6 +80,7 @@ fn main() -> Result<()> {
             scenario,
             browser,
             out_dir,
-        } => bench::run(&scenario, &browser, &out_dir),
+            profile,
+        } => bench::run(&scenario, &browser, &out_dir, profile.as_deref()),
     }
 }

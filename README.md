@@ -6,20 +6,27 @@ Measure and attribute Chromium-family browser process overhead on constrained Wi
 
 ## Why
 
-Site Isolation improves security but multiplies renderer processes. On RDS, thin clients, and low-end office PCs, process count and working set often dominate latency. This project turns that cost into **reproducible numbers** and policy comparisons — it is not a browser fork, and it does not recommend turning off isolation by default.
+Site Isolation improves security but multiplies renderer processes. On RDS, thin clients, and low-end office PCs, process count and working set often dominate latency. This project is the **RDS process-budget lab**: keep Site Isolation, A/B process-reuse / density policies, and turn the cost into **reproducible numbers**. It is not a browser fork, and it does **not** recommend turning off isolation, sandbox, or single-process as defaults.
+
+Framework (problem, pipeline, modules, principles, component map):
+
+- English: [docs/en/architecture.md](docs/en/architecture.md) · [security](docs/en/security.md) · [roadmap](docs/en/roadmap.md)
+- 中文: [docs/zh/architecture.md](docs/zh/architecture.md) · [安全](docs/zh/security.md) · [路线图](docs/zh/roadmap.md)
 
 ## Status
 
-**v0.1 — usable pipeline on Linux for classify/report; Windows sampler compiles for RDS hosts.**
+**v0.1 — classify/report on Linux; Windows sampler for RDS; bench with process-model profile A/B.**
 
 | Command | Linux (this box / CI) | Windows RDS (primary) |
 | --- | --- | --- |
 | `bpb classify` | Works | Works |
 | `bpb report` | Works (JSON + Markdown, optional redact) | Works |
 | `bpb sample` | **Smoke only** via `/proc` (google-chrome / chromium) | Native Toolhelp + working set + session id |
-| `bpb bench` | Loads `scripts/*.toml`, idle sleep, then sample→classify→report (URL launch skipped) | Same |
+| `bpb bench` | Scenario TOML → idle → sample→classify→report; optional `[[profiles]]` A/B + `compare.*`; best-effort browser launch | Same (launch via common Chrome/Edge paths) |
 
-Windows APIs are behind `cfg(windows)` and are not exercised on Linux CI. Run `bpb sample` on the RDS host for production numbers.
+Windows APIs are behind `cfg(windows)` and are not exercised on Linux CI. Run `bpb sample` / `bpb bench` on the RDS host for production numbers. Docs never invent fake benchmark figures.
+
+**Key component now:** profile A/B in bench — see [architecture §6](docs/en/architecture.md#6-profile-ab-design-bench).
 
 ## CLI
 
@@ -30,12 +37,26 @@ bpb report --input classified.json --out-dir ./out --redact
 bpb bench --scenario office-basic --browser chrome --out-dir ./out
 ```
 
+### Process-model A/B (profiles)
+
+```bash
+# Three profiles → out/baseline, out/process-per-site, out/renderer-limit-4 + out/compare.json|md
+cargo build
+./target/debug/bpb bench --scenario office-basic-ab --browser chrome --out-dir ./out-ab
+
+# Run a single profile from a multi-profile scenario
+./target/debug/bpb bench --scenario office-basic-ab --browser chrome --out-dir ./out-ab --profile baseline
+```
+
+`scripts/office-basic.toml` stays profile-free (single run at `out_dir` root). `scripts/office-basic-ab.toml` declares baseline / `--process-per-site` / `--renderer-process-limit=4` with a short idle for CI. None of the default profiles disable Site Isolation.
+
 ### Fixture smoke (no live browser required)
 
 ```bash
 cargo build --release
 ./target/release/bpb classify --input examples/sample-fixture.json --out /tmp/bpb-classified.json
 ./target/release/bpb report --input /tmp/bpb-classified.json --out-dir /tmp/bpb-out --redact
+# or: ./scripts/smoke-fixture.sh
 ```
 
 ### Live Linux smoke (optional)
@@ -50,9 +71,9 @@ bpb report --input /tmp/classified.json --out-dir /tmp/bpb-live --redact
 ## Layout
 
 ```
-src/           Rust CLI (sample / classify / report / bench / model)
-docs/en|zh/    Architecture & guides (bilingual)
-scripts/       Bench scenarios
+src/           Rust CLI (sample / classify / report / bench+profiles / model)
+docs/en|zh/    Architecture, security, roadmap (bilingual)
+scripts/       Bench scenarios (office-basic, office-basic-ab, …)
 examples/      Sample fixtures (redacted-friendly)
 ```
 

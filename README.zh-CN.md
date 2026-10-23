@@ -6,20 +6,27 @@ English: [README.md](README.md).
 
 ## 为什么做
 
-站点隔离提升安全，但会放大渲染进程数量。在 RDS、瘦客户机、低性能办公终端上，进程数和工作集往往先拖垮体验。本项目把开销变成**可复现数据**和策略对照——不是另做浏览器，也默认不建议关闭隔离。
+站点隔离提升安全，但会放大渲染进程数量。在 RDS、瘦客户机、低性能办公终端上，进程数和工作集往往先拖垮体验。本项目是 **RDS 进程预算实验室**：保留站点隔离，对进程复用 / 密度策略做 A/B，把开销变成**可复现数据**。不是另做浏览器，也**默认不建议**关闭隔离、沙箱或强制单进程。
+
+框架说明（问题、流水线、模块、原则、组件地图）：
+
+- 中文: [docs/zh/architecture.md](docs/zh/architecture.md) · [安全](docs/zh/security.md) · [路线图](docs/zh/roadmap.md)
+- English: [docs/en/architecture.md](docs/en/architecture.md) · [security](docs/en/security.md) · [roadmap](docs/en/roadmap.md)
 
 ## 状态
 
-**v0.1 — Linux 上 classify/report 可用；Windows 采样器在 Windows 目标上编译，供 RDS 主机使用。**
+**v0.1 — Linux 上 classify/report 可用；Windows 采样器供 RDS；bench 支持进程模型 profile A/B。**
 
 | 命令 | Linux（本机 / CI） | Windows RDS（主目标） |
 | --- | --- | --- |
 | `bpb classify` | 可用 | 可用 |
 | `bpb report` | 可用（JSON + Markdown，可选脱敏） | 可用 |
 | `bpb sample` | **仅冒烟**：通过 `/proc` 采集 google-chrome / chromium | 原生 Toolhelp + 工作集 + 会话 ID |
-| `bpb bench` | 加载 `scripts/*.toml`，空闲等待后 sample→classify→report（URL 启动跳过） | 同上 |
+| `bpb bench` | 场景 TOML → 空闲 → sample→classify→report；可选 `[[profiles]]` A/B + `compare.*`；尽力启动浏览器 | 同上（经常见 Chrome/Edge 路径启动） |
 
-Windows API 位于 `cfg(windows)`，Linux CI 不会跑到。生产数据请在 RDS 主机上执行 `bpb sample`。
+Windows API 位于 `cfg(windows)`，Linux CI 不会跑到。生产数据请在 RDS 主机上执行 `bpb sample` / `bpb bench`。文档不编造基准数字。
+
+**当前关键组件：** bench 中的 profile A/B — 见 [架构 §6](docs/zh/architecture.md#6-profile-ab-设计bench)。
 
 ## CLI
 
@@ -30,12 +37,26 @@ bpb report --input classified.json --out-dir ./out --redact
 bpb bench --scenario office-basic --browser chrome --out-dir ./out
 ```
 
+### 进程模型 A/B（profiles）
+
+```bash
+# 三个 profile → out/baseline、out/process-per-site、out/renderer-limit-4，以及 out/compare.json|md
+cargo build
+./target/debug/bpb bench --scenario office-basic-ab --browser chrome --out-dir ./out-ab
+
+# 多 profile 场景中只跑其中一个
+./target/debug/bpb bench --scenario office-basic-ab --browser chrome --out-dir ./out-ab --profile baseline
+```
+
+`scripts/office-basic.toml` 仍无 profiles（单次运行，产物在 `out_dir` 根目录）。`scripts/office-basic-ab.toml` 声明 baseline / `--process-per-site` / `--renderer-process-limit=4`，空闲时间较短便于 CI。默认 profile **均不**关闭站点隔离。
+
 ### 夹具冒烟（无需真实浏览器）
 
 ```bash
 cargo build --release
 ./target/release/bpb classify --input examples/sample-fixture.json --out /tmp/bpb-classified.json
 ./target/release/bpb report --input /tmp/bpb-classified.json --out-dir /tmp/bpb-out --redact
+# 或: ./scripts/smoke-fixture.sh
 ```
 
 ### 可选：Linux 实机冒烟
@@ -49,9 +70,9 @@ bpb report --input /tmp/classified.json --out-dir /tmp/bpb-live --redact
 ## 目录
 
 ```
-src/           Rust CLI
-docs/zh|en/    架构与指南（中英）
-scripts/       基准场景
+src/           Rust CLI（sample / classify / report / bench+profiles / model）
+docs/zh|en/    架构、安全、路线图（中英）
+scripts/       基准场景（office-basic、office-basic-ab 等）
 examples/      示例夹具
 ```
 

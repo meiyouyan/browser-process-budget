@@ -1,0 +1,25 @@
+# A/B harness: same office URLs under three process-model profiles.
+# Keep Site Isolation; measure density knobs (process-per-site, renderer limit).
+# Short idle for CI / smoke; raise idle_seconds on real RDS runs.
+id = "office-basic-ab"
+description = "Office pages under baseline vs process-per-site vs renderer-limit-4 (Site Isolation kept)"
+browser = "chrome"
+urls = [
+  "https://example.com",
+]
+idle_seconds = 2
+
+[[profiles]]
+id = "baseline"
+description = "Default Site Isolation"
+args = []
+
+[[profiles]]
+id = "process-per-site"
+description = "Same-site consolidation via --process-per-site (does not disable Site Isolation)"
+args = ["--process-per-site"]
+
+[[profiles]]
+id = "renderer-limit-4"
+description = "Soft renderer cap via --renderer-process-limit=4"
+args = ["--renderer-process-limit=4"]
