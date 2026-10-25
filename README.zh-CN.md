@@ -48,7 +48,7 @@ cargo build
 ./target/debug/bpb bench --scenario office-basic-ab --browser chrome --out-dir ./out-ab --profile baseline
 ```
 
-`scripts/office-basic.toml` 仍无 profiles（单次运行，产物在 `out_dir` 根目录）。`scripts/office-basic-ab.toml` 声明 baseline / `--process-per-site` / `--renderer-process-limit=4`，空闲时间较短便于 CI。默认 profile **均不**关闭站点隔离。
+`scripts/office-basic.toml` 仍无 profiles（单次运行，产物在 `out_dir` 根目录）。`scripts/office-basic-ab.toml` 声明 baseline / `--process-per-site` / `--renderer-process-limit=4`，空闲时间较短便于 CI。多 profile 时每组使用独立 `--user-data-dir`，并在组间停止匹配的浏览器进程、按该目录过滤采样，避免进程叠采。默认 profile **均不**关闭站点隔离。
 
 ### 夹具冒烟（无需真实浏览器）
 

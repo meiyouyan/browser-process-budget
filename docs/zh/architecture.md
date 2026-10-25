@@ -97,7 +97,7 @@ args = ["--renderer-process-limit=4"]
 行为：
 
 - **无 `[[profiles]]`** → 单次运行；产物落在 `out_dir/` 根目录（向后兼容）。
-- **有 profiles** → 对每个 profile：写 `scenario-marker.json`（含 `profile_id`、`args`、`security_notes`），空闲，再 sample→classify→report 到 `out_dir/<profile_id>/`；最后汇总 `compare.json` / `compare.md`（`process_count`、`total_ws_bytes`、按角色聚合）。
+- **有 profiles** → 对每个 profile：使用独立 `--user-data-dir`（`out_dir/<id>/user-data`），组前/组后停止命令行匹配该目录的浏览器进程；写 `scenario-marker.json`（含 `profile_id`、`args`、`launch_args`、`user_data_dir`、`security_notes`），空闲，再 sample（按 user-data-dir 过滤）→classify→report 到 `out_dir/<profile_id>/`；最后汇总 `compare.json` / `compare.md`（`process_count`、`total_ws_bytes`、按角色聚合）。
 - **启动** — 若 `urls` 或 `args` 非空，尽力启动 Chrome/Edge（Windows 常见路径；Linux 的 `google-chrome` / `chromium`）。启动失败只打警告，**仍采样**已有进程（不使整次 bench 失败）。
 - **CLI** — `bpb bench --scenario … --browser … --out-dir …`；多 profile 时可用 `--profile <id>` 只跑其中一个。
 

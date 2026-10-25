@@ -48,7 +48,7 @@ cargo build
 ./target/debug/bpb bench --scenario office-basic-ab --browser chrome --out-dir ./out-ab --profile baseline
 ```
 
-`scripts/office-basic.toml` stays profile-free (single run at `out_dir` root). `scripts/office-basic-ab.toml` declares baseline / `--process-per-site` / `--renderer-process-limit=4` with a short idle for CI. None of the default profiles disable Site Isolation.
+`scripts/office-basic.toml` stays profile-free (single run at `out_dir` root). `scripts/office-basic-ab.toml` declares baseline / `--process-per-site` / `--renderer-process-limit=4` with a short idle for CI. Multi-profile runs use a dedicated `--user-data-dir` per profile, stop matching browser processes between profiles, and filter the sample to that directory so counts do not stack. None of the default profiles disable Site Isolation.
 
 ### Fixture smoke (no live browser required)
 

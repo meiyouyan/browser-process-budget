@@ -3,17 +3,22 @@
 //! Scenarios may declare `[[profiles]]` (Chrome/Edge launch arg sets). When
 //! present, each profile gets its own `out_dir/<profile_id>/` tree and a
 //! cross-profile `compare.json` / `compare.md` is written at `out_dir/`.
+//! Multi-profile runs isolate each launch with a dedicated `--user-data-dir`,
+//! stop matching browser processes between profiles, and filter the sample to
+//! that directory so A/B numbers do not stack.
 //! Without profiles, behavior matches the original single-run layout.
 
 use crate::{classify, report, sample};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::Duration;
+use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
 #[derive(Debug, Deserialize)]
 struct Scenario {
@@ -113,7 +118,31 @@ pub fn run(scenario: &str, browser: &str, out_dir: &Path, profile_filter: Option
             out_dir.to_path_buf()
         };
 
-        let launch_status = maybe_launch_browser(browser, &scen.urls, &profile.args);
+        // Multi-profile A/B: isolate each launch so samples do not stack.
+        let user_data_dir = if multi {
+            let ud = run_dir.join("user-data");
+            fs::create_dir_all(&ud)
+                .with_context(|| format!("creating {}", ud.display()))?;
+            let ud = ud.canonicalize().unwrap_or_else(|_| ud.clone());
+            let stopped = stop_browser_for_user_data(browser, &ud);
+            eprintln!(
+                "bpb bench: profile '{}': pre-launch cleanup stopped {stopped} process(es) for {}",
+                profile.id,
+                ud.display()
+            );
+            Some(ud)
+        } else {
+            None
+        };
+
+        let mut launch_args = profile.args.clone();
+        if let Some(ref ud) = user_data_dir {
+            launch_args.push(format!("--user-data-dir={}", ud.display()));
+            launch_args.push("--no-first-run".into());
+            launch_args.push("--no-default-browser-check".into());
+        }
+
+        let launch_status = maybe_launch_browser(browser, &scen.urls, &launch_args);
 
         let security_notes = security_notes_for(&profile.args);
 
@@ -127,6 +156,8 @@ pub fn run(scenario: &str, browser: &str, out_dir: &Path, profile_filter: Option
             "profile_id": profile.id,
             "profile_description": profile.description,
             "args": profile.args,
+            "launch_args": launch_args,
+            "user_data_dir": user_data_dir.as_ref().map(|p| p.display().to_string()),
             "security_notes": security_notes,
             "url_launch": launch_status,
             "notes": "Keep Site Isolation enabled. Profile args trade process density vs. fate-sharing within Site Isolation constraints; never recommend --disable-site-isolation-trials / --no-sandbox / --single-process as defaults.",
@@ -146,6 +177,13 @@ pub fn run(scenario: &str, browser: &str, out_dir: &Path, profile_filter: Option
 
         let sample_path = run_dir.join("sample.json");
         sample::run(browser, Some(&sample_path), true)?;
+        if let Some(ref ud) = user_data_dir {
+            let kept = filter_sample_to_user_data(&sample_path, ud)?;
+            eprintln!(
+                "bpb bench: profile '{}': sample kept {kept} process(es) matching user-data-dir",
+                profile.id
+            );
+        }
 
         let classified_path = run_dir.join("classified.json");
         classify::run(&sample_path, Some(&classified_path))?;
@@ -153,6 +191,16 @@ pub fn run(scenario: &str, browser: &str, out_dir: &Path, profile_filter: Option
 
         let summary = summarize_profile(&profile.id, &profile.description, &profile.args, &classified_path)?;
         summaries.push(summary);
+
+        if let Some(ref ud) = user_data_dir {
+            let stopped = stop_browser_for_user_data(browser, ud);
+            eprintln!(
+                "bpb bench: profile '{}': post-sample cleanup stopped {stopped} process(es)",
+                profile.id
+            );
+            // Brief pause so the next profile does not race teardown.
+            thread::sleep(Duration::from_secs(1));
+        }
 
         eprintln!(
             "bpb bench: profile '{}': wrote sample/classified/report under {}",
@@ -202,6 +250,113 @@ fn security_notes_for(args: &[String]) -> Vec<String> {
         notes.push("Baseline: no extra Chromium flags; default Site Isolation.".into());
     }
     notes
+}
+
+
+/// Normalize a path for substring matching in Chromium command lines.
+fn normalize_path_needle(path: &Path) -> String {
+    path.display()
+        .to_string()
+        .replace('\\', "/")
+        .to_ascii_lowercase()
+}
+
+fn process_name_matches_browser(browser: &str, name: &OsStr) -> bool {
+    let n = name.to_string_lossy().to_ascii_lowercase();
+    let base = n
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(&n);
+    let base = base.trim_end_matches(".exe");
+    let family = browser.to_ascii_lowercase();
+    match family.as_str() {
+        "chrome" | "google-chrome" | "chromium" => matches!(
+            base,
+            "chrome" | "google-chrome" | "google-chrome-stable" | "chromium" | "chromium-browser"
+        ),
+        "edge" | "msedge" => matches!(base, "msedge" | "microsoft-edge" | "microsoftedge"),
+        "auto" => matches!(
+            base,
+            "chrome"
+                | "google-chrome"
+                | "google-chrome-stable"
+                | "chromium"
+                | "chromium-browser"
+                | "msedge"
+                | "microsoft-edge"
+                | "microsoftedge"
+        ),
+        _ => false,
+    }
+}
+
+/// Stop browser processes whose command line references `user_data_dir`.
+/// Scoped cleanup: does not kill unrelated Chrome/Edge instances.
+fn stop_browser_for_user_data(browser: &str, user_data_dir: &Path) -> usize {
+    let needle = normalize_path_needle(user_data_dir);
+    let needle_win = needle.replace('/', "\\");
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing()
+            .with_cmd(UpdateKind::Always)
+            .with_exe(UpdateKind::OnlyIfNotSet),
+    );
+    let mut stopped = 0usize;
+    for process in sys.processes().values() {
+        if !process_name_matches_browser(browser, process.name()) {
+            continue;
+        }
+        let cmd_parts: Vec<String> = process
+            .cmd()
+            .iter()
+            .map(|s| s.to_string_lossy().to_ascii_lowercase())
+            .collect();
+        let cmd_joined = cmd_parts.join(" ");
+        let cmd_norm = cmd_joined.replace('\\', "/");
+        if !(cmd_norm.contains(&needle)
+            || cmd_joined.contains(&needle_win)
+            || cmd_joined.contains(&needle))
+        {
+            continue;
+        }
+        if process.kill() {
+            stopped += 1;
+        }
+    }
+    if stopped > 0 {
+        thread::sleep(Duration::from_millis(500));
+    }
+    stopped
+}
+
+/// Keep only sampled processes whose command_line references `user_data_dir`.
+/// If none match (cmdline unavailable), leave the sample unchanged and warn.
+fn filter_sample_to_user_data(sample_path: &Path, user_data_dir: &Path) -> Result<usize> {
+    let raw = fs::read_to_string(sample_path)
+        .with_context(|| format!("reading {}", sample_path.display()))?;
+    let mut doc: crate::model::SampleDocument =
+        serde_json::from_str(&raw).context("parsing sample.json for user-data filter")?;
+    let needle = normalize_path_needle(user_data_dir);
+    let needle_win = needle.replace('/', "\\");
+    let before = doc.processes.len();
+    doc.processes.retain(|p| {
+        let cl = p.command_line.to_ascii_lowercase();
+        let cl_norm = cl.replace('\\', "/");
+        cl_norm.contains(&needle) || cl.contains(&needle_win) || cl.contains(&needle)
+    });
+    if doc.processes.is_empty() && before > 0 {
+        eprintln!(
+            "bpb bench: warning: user-data-dir filter matched 0/{before} processes; keeping unfiltered sample"
+        );
+        return Ok(before);
+    }
+    fs::write(
+        sample_path,
+        format!("{}\n", serde_json::to_string_pretty(&doc)?),
+    )?;
+    Ok(doc.processes.len())
 }
 
 /// Best-effort browser launch. Never fails the bench — logs and continues.
@@ -501,6 +656,12 @@ args = ["--renderer-process-limit=4"]
         assert_eq!(s.profiles.len(), 3);
         assert_eq!(s.profiles[1].args, vec!["--process-per-site"]);
         assert_eq!(s.profiles[2].args, vec!["--renderer-process-limit=4"]);
+    }
+
+    #[test]
+    fn normalize_path_needle_lowercases_and_slashes() {
+        let n = normalize_path_needle(Path::new("Foo/Bar\\Baz"));
+        assert_eq!(n, "foo/bar/baz");
     }
 
     #[test]

@@ -97,7 +97,7 @@ args = ["--renderer-process-limit=4"]
 Behavior:
 
 - **No `[[profiles]]`** → single run; artifacts at `out_dir/` root (backward compatible).
-- **With profiles** → for each profile: write `scenario-marker.json` (includes `profile_id`, `args`, `security_notes`), idle, sample→classify→report under `out_dir/<profile_id>/`; then `compare.json` / `compare.md` summarizing `process_count`, `total_ws_bytes`, and role aggregates.
+- **With profiles** → for each profile: use a dedicated `--user-data-dir` (`out_dir/<id>/user-data`), stop browser processes whose command line matches that directory before/after the run; write `scenario-marker.json` (includes `profile_id`, `args`, `launch_args`, `user_data_dir`, `security_notes`), idle, sample (filtered to that user-data-dir)→classify→report under `out_dir/<profile_id>/`; then `compare.json` / `compare.md` summarizing `process_count`, `total_ws_bytes`, and role aggregates.
 - **Launch** — if `urls` or `args` non-empty, best-effort start Chrome/Edge (common Windows paths; Linux `google-chrome` / `chromium`). Launch failure logs a warning and **still samples** existing processes (bench does not fail).
 - **CLI** — `bpb bench --scenario … --browser … --out-dir …`; optional `--profile <id>` to run one profile when several are defined.
 
