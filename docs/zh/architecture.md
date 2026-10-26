@@ -37,7 +37,7 @@ sample  →  classify  →  report
 | **classify** | 角色标注（`src/classify.rs`） | 已实现 |
 | **report** | JSON + Markdown（`src/report.rs`） | 已实现 |
 | **bench** | 场景运行器 + **profile A/B**（`src/bench.rs`） | 已实现（本版本关键组件） |
-| **scenarios** | `scripts/` 下 TOML 场景 | 已实现（`office-basic`、`office-basic-ab`、`office-dense-ab` 等） |
+| **scenarios** | `scripts/` 下 TOML 场景 | 已实现（`office-basic`、`office-basic-ab`、`office-dense-ab`、`office-samesite-ab` 等） |
 | **profiles（A/B）** | 场景 TOML 中声明的启动参数集 | **当前已实现** |
 | **session aggregation** | 跨会话 RDS 汇总 | 规划中（见路线图） |
 | **private-WS attribution** | 更强的私有/PSS 类归因 | 规划中（见路线图） |
@@ -105,7 +105,7 @@ Marker/文档中的安全立场：`--process-per-site` 与 renderer 上限是在
 
 ## 7. 后续组件（仅占位）
 
-见 [roadmap.md](roadmap.md)。近期占位（此处未实现）：多会话预算汇总、PSS 类私有归因。更丰富办公场景：已提供 `office-dense-ab`（多源标签）；后续可再扩展 SaaS 集合。
+见 [roadmap.md](roadmap.md)。近期占位（此处未实现）：多会话预算汇总、PSS 类私有归因。更丰富办公场景：已提供 `office-dense-ab`（多源标签）与 `office-samesite-ab`（同一 eTLD+1 多标签，便于 `--process-per-site` 合并渲染进程）；后续可再扩展 SaaS 集合。
 
 ## 相关文档
 

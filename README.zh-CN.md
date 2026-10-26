@@ -48,7 +48,7 @@ cargo build
 ./target/debug/bpb bench --scenario office-basic-ab --browser chrome --out-dir ./out-ab --profile baseline
 ```
 
-`scripts/office-basic.toml` 仍无 profiles（单次运行，产物在 `out_dir` 根目录）。`scripts/office-basic-ab.toml` 声明 baseline / `--process-per-site` / `--renderer-process-limit=4`，空闲时间较短便于 CI。若要在 RDS 上拉开进程模型差异（仍保留站点隔离），请用 **`office-dense-ab`**（6–8 个多源 URL，`idle_seconds = 20`）；可选 **`office-dense-ab-quick`**（4 个 URL，空闲 3 秒）做测试机快速冒烟。多 profile 时每组使用独立 `--user-data-dir`，并在组间停止匹配的浏览器进程、按该目录过滤采样，避免进程叠采。默认 profile **均不**关闭站点隔离。
+`scripts/office-basic.toml` 仍无 profiles（单次运行，产物在 `out_dir` 根目录）。`scripts/office-basic-ab.toml` 声明 baseline / `--process-per-site` / `--renderer-process-limit=4`，空闲时间较短便于 CI。若要在 RDS 上拉开进程模型差异（仍保留站点隔离），请用 **`office-dense-ab`**（6–8 个多源 URL，`idle_seconds = 20`）；可选 **`office-dense-ab-quick`**（4 个 URL，空闲 3 秒）做测试机快速冒烟。多源标签在各 profile 下渲染进程数往往接近；要拉开 **`--process-per-site` 同站合并**效果，请用 **`office-samesite-ab`**（同一 eTLD+1 上 6–8 个维基百科页面，空闲 20 秒）或 **`office-samesite-ab-quick`**（4 个同站 URL，空闲 3 秒）。多 profile 时每组使用独立 `--user-data-dir`，并在组间停止匹配的浏览器进程、按该目录过滤采样，避免进程叠采。默认 profile **均不**关闭站点隔离。
 
 ```bash
 # 更密的多源 A/B（面向 RDS 的空闲时间）
@@ -56,6 +56,12 @@ cargo build
 
 # 更快的冒烟孪生场景
 ./target/debug/bpb bench --scenario office-dense-ab-quick --browser chrome --out-dir ./out-dense-ab-quick
+
+# 同站多标签 A/B（站点隔离下的 process-per-site 合并）
+./target/debug/bpb bench --scenario office-samesite-ab --browser chrome --out-dir ./out-samesite-ab
+
+# 更快的同站冒烟孪生场景
+./target/debug/bpb bench --scenario office-samesite-ab-quick --browser chrome --out-dir ./out-samesite-ab-quick
 ```
 
 ### 夹具冒烟（无需真实浏览器）
@@ -80,7 +86,7 @@ bpb report --input /tmp/classified.json --out-dir /tmp/bpb-live --redact
 ```
 src/           Rust CLI（sample / classify / report / bench+profiles / model）
 docs/zh|en/    架构、安全、路线图（中英）
-scripts/       基准场景（office-basic、office-basic-ab、office-dense-ab 等）
+scripts/       基准场景（office-basic、office-basic-ab、office-dense-ab、office-samesite-ab 等）
 examples/      示例夹具
 ```
 

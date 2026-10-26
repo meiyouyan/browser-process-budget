@@ -1,0 +1,28 @@
+# Faster smoke twin of office-samesite-ab (fewer same-site URLs, short idle).
+# Use for a quick check on the RDS test host; full A/B should use office-samesite-ab.
+# Keep Site Isolation; measurement only — no disable-isolation flags.
+id = "office-samesite-ab-quick"
+description = "Quick smoke: same-site Wikipedia tabs under three process-model profiles (Site Isolation kept; lighter than office-samesite-ab)"
+browser = "chrome"
+urls = [
+  "https://en.wikipedia.org/wiki/Main_Page",
+  "https://en.wikipedia.org/wiki/Computer",
+  "https://en.wikipedia.org/wiki/Operating_system",
+  "https://en.wikipedia.org/wiki/Web_browser",
+]
+idle_seconds = 3
+
+[[profiles]]
+id = "baseline"
+description = "Default Site Isolation"
+args = []
+
+[[profiles]]
+id = "process-per-site"
+description = "Same-site consolidation via --process-per-site (does not disable Site Isolation)"
+args = ["--process-per-site"]
+
+[[profiles]]
+id = "renderer-limit-4"
+description = "Soft renderer cap via --renderer-process-limit=4"
+args = ["--renderer-process-limit=4"]

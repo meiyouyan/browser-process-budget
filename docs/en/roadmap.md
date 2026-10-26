@@ -14,7 +14,7 @@ Milestones are planning stubs. Dates are approximate; no fabricated benchmark re
 ## Month 1–2
 
 - [ ] Harden Windows RDS sampling (session id coverage, edge cases)
-- [x] Expand office scenarios (tab density, common SaaS pages) — `office-dense-ab` (+ optional `office-dense-ab-quick`); still measurement-only
+- [x] Expand office scenarios (tab density, common SaaS pages) — `office-dense-ab` (+ optional `office-dense-ab-quick`); same-site multi-tab for process-per-site — `office-samesite-ab` (+ `office-samesite-ab-quick`); still measurement-only
 - [ ] Optional Memory Saver / discard-related flags as **named profiles** (document trade-offs; never disable isolation)
 - [ ] CI: fixture classify/report + `office-basic-ab` smoke (0 Chrome procs OK on Linux)
 

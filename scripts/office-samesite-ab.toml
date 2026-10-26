@@ -1,0 +1,36 @@
+# A/B harness: many tabs on the SAME registrable domain (eTLD+1) under Site Isolation.
+# office-dense-ab used distinct origins, so --process-per-site barely differed from baseline
+# (~same renderer count). Same-site tabs exercise consolidation: process-per-site should
+# share renderers across these Wikipedia pages vs baseline process-per-site-instance /
+# default behavior that tends to give each browsing instance its own renderer.
+# Keep Site Isolation; measurement only — no disable-isolation / no-sandbox / single-process flags.
+# idle_seconds = 20 is RDS-oriented; CI / smoke can use office-samesite-ab-quick.
+id = "office-samesite-ab"
+description = "Many tabs on the same site (Wikipedia) to exercise process-per-site consolidation under Site Isolation vs baseline / renderer-limit-4"
+browser = "chrome"
+urls = [
+  "https://en.wikipedia.org/wiki/Main_Page",
+  "https://en.wikipedia.org/wiki/Computer",
+  "https://en.wikipedia.org/wiki/Operating_system",
+  "https://en.wikipedia.org/wiki/Web_browser",
+  "https://en.wikipedia.org/wiki/Remote_desktop",
+  "https://en.wikipedia.org/wiki/Virtual_desktop",
+  "https://en.wikipedia.org/wiki/Process_(computing)",
+  "https://en.wikipedia.org/wiki/Memory_management",
+]
+idle_seconds = 20
+
+[[profiles]]
+id = "baseline"
+description = "Default Site Isolation"
+args = []
+
+[[profiles]]
+id = "process-per-site"
+description = "Same-site consolidation via --process-per-site (does not disable Site Isolation)"
+args = ["--process-per-site"]
+
+[[profiles]]
+id = "renderer-limit-4"
+description = "Soft renderer cap via --renderer-process-limit=4"
+args = ["--renderer-process-limit=4"]
