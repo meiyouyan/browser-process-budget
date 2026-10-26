@@ -1,0 +1,28 @@
+# Faster smoke twin of office-dense-ab (fewer URLs, short idle).
+# Use for a quick check on the RDS test host; full A/B should use office-dense-ab.
+# Keep Site Isolation; measurement only — no disable-isolation flags.
+id = "office-dense-ab-quick"
+description = "Quick smoke: multi-origin office tabs under three process-model profiles (Site Isolation kept; lighter than office-dense-ab)"
+browser = "chrome"
+urls = [
+  "https://example.com",
+  "https://www.wikipedia.org",
+  "https://www.bing.com",
+  "https://github.com",
+]
+idle_seconds = 3
+
+[[profiles]]
+id = "baseline"
+description = "Default Site Isolation"
+args = []
+
+[[profiles]]
+id = "process-per-site"
+description = "Same-site consolidation via --process-per-site (does not disable Site Isolation)"
+args = ["--process-per-site"]
+
+[[profiles]]
+id = "renderer-limit-4"
+description = "Soft renderer cap via --renderer-process-limit=4"
+args = ["--renderer-process-limit=4"]

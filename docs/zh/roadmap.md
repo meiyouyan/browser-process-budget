@@ -14,7 +14,7 @@
 ## 第 1–2 个月
 
 - [ ] 加固 Windows RDS 采样（会话 ID 覆盖、边界情况）
-- [ ] 扩展办公场景（标签密度、常见 SaaS 页面）——仍仅度量
+- [x] 扩展办公场景（标签密度、常见 SaaS 页面）——`office-dense-ab`（及可选 `office-dense-ab-quick`）；仍仅度量
 - [ ] 可选将 Memory Saver / discard 相关标志做成**具名 profile**（写明权衡；永不关闭隔离）
 - [ ] CI：夹具 classify/report + `office-basic-ab` 冒烟（Linux 上 0 个 Chrome 进程可接受）
 

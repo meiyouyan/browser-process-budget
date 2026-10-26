@@ -1,0 +1,34 @@
+# A/B harness: denser multi-origin office-like tabs under Site Isolation.
+# Previous office-basic-ab (1 URL + short idle) was too light for RDS process-model
+# divergence; this scenario opens several distinct sites to force more renderers / OOPIFs.
+# Keep Site Isolation; measurement only — no disable-isolation / no-sandbox / single-process flags.
+# idle_seconds = 20 is RDS-oriented; CI / smoke can use office-dense-ab-quick or office-basic-ab.
+id = "office-dense-ab"
+description = "Denser multi-origin office-like tabs under baseline vs process-per-site vs renderer-limit-4 (Site Isolation kept; more renderers/OOPIFs than office-basic-ab)"
+browser = "chrome"
+urls = [
+  "https://example.com",
+  "https://www.wikipedia.org",
+  "https://www.bing.com",
+  "https://github.com",
+  "https://www.microsoft.com",
+  "https://www.office.com",
+  "https://news.ycombinator.com",
+  "https://www.bbc.com/news",
+]
+idle_seconds = 20
+
+[[profiles]]
+id = "baseline"
+description = "Default Site Isolation"
+args = []
+
+[[profiles]]
+id = "process-per-site"
+description = "Same-site consolidation via --process-per-site (does not disable Site Isolation)"
+args = ["--process-per-site"]
+
+[[profiles]]
+id = "renderer-limit-4"
+description = "Soft renderer cap via --renderer-process-limit=4"
+args = ["--renderer-process-limit=4"]

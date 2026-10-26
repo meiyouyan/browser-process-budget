@@ -48,7 +48,15 @@ cargo build
 ./target/debug/bpb bench --scenario office-basic-ab --browser chrome --out-dir ./out-ab --profile baseline
 ```
 
-`scripts/office-basic.toml` stays profile-free (single run at `out_dir` root). `scripts/office-basic-ab.toml` declares baseline / `--process-per-site` / `--renderer-process-limit=4` with a short idle for CI. Multi-profile runs use a dedicated `--user-data-dir` per profile, stop matching browser processes between profiles, and filter the sample to that directory so counts do not stack. None of the default profiles disable Site Isolation.
+`scripts/office-basic.toml` stays profile-free (single run at `out_dir` root). `scripts/office-basic-ab.toml` declares baseline / `--process-per-site` / `--renderer-process-limit=4` with a short idle for CI. For RDS process-model divergence under Site Isolation, use **`office-dense-ab`** (6–8 multi-origin URLs, `idle_seconds = 20`); optional **`office-dense-ab-quick`** (4 URLs, idle 3s) for a faster smoke on the test host. Multi-profile runs use a dedicated `--user-data-dir` per profile, stop matching browser processes between profiles, and filter the sample to that directory so counts do not stack. None of the default profiles disable Site Isolation.
+
+```bash
+# Denser multi-origin A/B (RDS-oriented idle)
+./target/debug/bpb bench --scenario office-dense-ab --browser chrome --out-dir ./out-dense-ab
+
+# Faster smoke twin
+./target/debug/bpb bench --scenario office-dense-ab-quick --browser chrome --out-dir ./out-dense-ab-quick
+```
 
 ### Fixture smoke (no live browser required)
 
@@ -73,7 +81,7 @@ bpb report --input /tmp/classified.json --out-dir /tmp/bpb-live --redact
 ```
 src/           Rust CLI (sample / classify / report / bench+profiles / model)
 docs/en|zh/    Architecture, security, roadmap (bilingual)
-scripts/       Bench scenarios (office-basic, office-basic-ab, …)
+scripts/       Bench scenarios (office-basic, office-basic-ab, office-dense-ab, …)
 examples/      Sample fixtures (redacted-friendly)
 ```
 

@@ -37,7 +37,7 @@ sample  →  classify  →  report
 | **classify** | Role labeling (`src/classify.rs`) | Implemented |
 | **report** | JSON + Markdown (`src/report.rs`) | Implemented |
 | **bench** | Scenario runner + **profile A/B** (`src/bench.rs`) | Implemented (key component this release) |
-| **scenarios** | TOML scripts under `scripts/` | Implemented (`office-basic`, `office-basic-ab`, …) |
+| **scenarios** | TOML scripts under `scripts/` | Implemented (`office-basic`, `office-basic-ab`, `office-dense-ab`, …) |
 | **profiles (A/B)** | Launch-arg sets declared in scenario TOML | **Implemented now** |
 | **session aggregation** | Cross-session RDS rollups | Planned (roadmap) |
 | **private-WS attribution** | Stronger private/PSS-like attribution | Planned (roadmap) |
@@ -105,7 +105,7 @@ Security stance in markers/docs: `--process-per-site` and renderer limits trade 
 
 ## 7. Next components (stubs only)
 
-See [roadmap.md](roadmap.md). Near-term stubs (not implemented here): multi-session budget rollups, richer office scenarios, PSS-like private attribution.
+See [roadmap.md](roadmap.md). Near-term stubs (not implemented here): multi-session budget rollups, PSS-like private attribution. Richer office scenarios: `office-dense-ab` shipped (multi-origin tabs); further SaaS sets may follow.
 
 ## Related
 
