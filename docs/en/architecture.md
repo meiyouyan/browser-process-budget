@@ -37,8 +37,8 @@ sample  →  classify  →  report
 | **classify** | Role labeling (`src/classify.rs`) | Implemented |
 | **report** | JSON + Markdown (`src/report.rs`) | Implemented |
 | **bench** | Scenario runner + **profile A/B** (`src/bench.rs`) | Implemented (key component this release) |
-| **scenarios** | TOML scripts under `scripts/` | Implemented (`office-basic`, `office-basic-ab`, `office-dense-ab`, `office-samesite-ab`, …) |
-| **profiles (A/B)** | Launch-arg sets declared in scenario TOML | **Implemented now** |
+| **scenarios** | TOML scripts under `scripts/` | Implemented (`office-basic`, `office-basic-ab`, `office-dense-ab`, `office-samesite-ab`, `office-memory-ab`, …) |
+| **profiles (A/B)** | Launch-arg sets + optional Preferences seeding in scenario TOML | **Implemented now** |
 | **session aggregation** | Cross-session RDS rollups | Planned (roadmap) |
 | **private-WS attribution** | Stronger private/PSS-like attribution | Planned (roadmap) |
 
@@ -66,7 +66,7 @@ Shared serde types live in `src/model.rs`. CLI wiring is `src/main.rs` (`bpb` bi
 | Framework docs | `docs/en/*`, `docs/zh/*` |
 | Top-level security policy | `SECURITY.md` |
 
-**Implemented now (key component):** process-model **profile A/B** in bench — scenarios declare `[[profiles]]` with `id` / `description` / `args`; each profile gets `out_dir/<id>/` (marker, sample, classified, report); multi-profile runs emit `out_dir/compare.json` and `compare.md`.
+**Implemented now (key component):** process-model **profile A/B** in bench — scenarios declare `[[profiles]]` with `id` / `description` / `args` and optional `preferences` (JSON merged into `user-data/Default/Preferences` before launch, e.g. Memory Saver); each profile gets `out_dir/<id>/` (marker, sample, classified, report); multi-profile runs emit `out_dir/compare.json` and `compare.md`.
 
 ## 6. Profile A/B design (bench)
 
@@ -92,20 +92,32 @@ args = ["--process-per-site"]
 id = "renderer-limit-4"
 description = "Soft renderer cap"
 args = ["--renderer-process-limit=4"]
+
+# Optional: seed Chromium Preferences (Memory Saver example)
+[[profiles]]
+id = "memory-saver-aggressive"
+description = "Memory Saver on with short lab discard"
+args = ["--enable-features=HighEfficiencyModeAvailable:time_before_discard/30s/default_state/true"]
+
+[profiles.preferences.performance_tuning.high_efficiency_mode]
+state = 2
+time_before_discard_in_minutes = 1
+aggressiveness = 2
 ```
 
 Behavior:
 
 - **No `[[profiles]]`** → single run; artifacts at `out_dir/` root (backward compatible).
-- **With profiles** → for each profile: use a dedicated `--user-data-dir` (`out_dir/<id>/user-data`), stop browser processes whose command line matches that directory before/after the run; write `scenario-marker.json` (includes `profile_id`, `args`, `launch_args`, `user_data_dir`, `security_notes`), idle, sample (filtered to that user-data-dir)→classify→report under `out_dir/<profile_id>/`; then `compare.json` / `compare.md` summarizing `process_count`, `total_ws_bytes`, and role aggregates.
+- **With profiles** → for each profile: use a dedicated `--user-data-dir` (`out_dir/<id>/user-data`), stop browser processes whose command line matches that directory before/after the run; if `preferences` is set, merge into `user-data/Default/Preferences` (nested keys, no wipe of unrelated defaults); write `scenario-marker.json` (includes `profile_id`, `args`, `preferences`, `launch_args`, `user_data_dir`, `security_notes`), idle, sample (filtered to that user-data-dir)→classify→report under `out_dir/<profile_id>/`; then `compare.json` / `compare.md` summarizing `process_count`, `total_ws_bytes`, and role aggregates.
 - **Launch** — if `urls` or `args` non-empty, best-effort start Chrome/Edge (common Windows paths; Linux `google-chrome` / `chromium`). Launch failure logs a warning and **still samples** existing processes (bench does not fail).
 - **CLI** — `bpb bench --scenario … --browser … --out-dir …`; optional `--profile <id>` to run one profile when several are defined.
+- **Memory Saver profiles** — `office-memory-ab` (+ `office-memory-ab-quick`) A/B baseline vs aggressive Memory Saver prefs vs Memory Saver off. Prefs seed `performance_tuning.high_efficiency_mode.*`; lab discard windows are intentionally short (production default ~120 minutes). Discarded tabs reload on focus and can understate steady-state memory until reactivation; this does **not** disable Site Isolation.
 
-Security stance in markers/docs: `--process-per-site` and renderer limits trade fate-sharing / contention **within** Site Isolation; they are measurement knobs, not a license to disable isolation.
+Security stance in markers/docs: `--process-per-site`, renderer limits, and Memory Saver trade fate-sharing / contention / discard **within** Site Isolation; they are measurement knobs, not a license to disable isolation.
 
 ## 7. Next components (stubs only)
 
-See [roadmap.md](roadmap.md). Near-term stubs (not implemented here): multi-session budget rollups, PSS-like private attribution. Richer office scenarios: `office-dense-ab` (multi-origin tabs) and `office-samesite-ab` (same eTLD+1 tabs so `--process-per-site` can consolidate renderers) shipped; further SaaS sets may follow.
+See [roadmap.md](roadmap.md). Near-term stubs (not implemented here): multi-session budget rollups, PSS-like private attribution. Richer office scenarios: `office-dense-ab` (multi-origin tabs), `office-samesite-ab` (same eTLD+1 tabs so `--process-per-site` can consolidate renderers), and `office-memory-ab` (Memory Saver on/off/baseline with Preferences seeding) shipped; further SaaS sets may follow.
 
 ## Related
 

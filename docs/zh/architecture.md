@@ -37,8 +37,8 @@ sample  →  classify  →  report
 | **classify** | 角色标注（`src/classify.rs`） | 已实现 |
 | **report** | JSON + Markdown（`src/report.rs`） | 已实现 |
 | **bench** | 场景运行器 + **profile A/B**（`src/bench.rs`） | 已实现（本版本关键组件） |
-| **scenarios** | `scripts/` 下 TOML 场景 | 已实现（`office-basic`、`office-basic-ab`、`office-dense-ab`、`office-samesite-ab` 等） |
-| **profiles（A/B）** | 场景 TOML 中声明的启动参数集 | **当前已实现** |
+| **scenarios** | `scripts/` 下 TOML 场景 | 已实现（`office-basic`、`office-basic-ab`、`office-dense-ab`、`office-samesite-ab`、`office-memory-ab` 等） |
+| **profiles（A/B）** | 场景 TOML 中的启动参数集 + 可选 Preferences 预置 | **当前已实现** |
 | **session aggregation** | 跨会话 RDS 汇总 | 规划中（见路线图） |
 | **private-WS attribution** | 更强的私有/PSS 类归因 | 规划中（见路线图） |
 
@@ -66,7 +66,7 @@ sample  →  classify  →  report
 | 框架文档 | `docs/zh/*`、`docs/en/*` |
 | 顶层安全策略 | `SECURITY.md` |
 
-**当前已实现的关键组件：** bench 中的进程模型 **profile A/B** — 场景声明 `[[profiles]]`（`id` / `description` / `args`）；每个 profile 对应 `out_dir/<id>/`（marker、sample、classified、report）；多 profile 运行后写出 `out_dir/compare.json` 与 `compare.md`。
+**当前已实现的关键组件：** bench 中的进程模型 **profile A/B** — 场景声明 `[[profiles]]`（`id` / `description` / `args`，以及可选 `preferences`，启动前合并进 `user-data/Default/Preferences`，例如 Memory Saver）；每个 profile 对应 `out_dir/<id>/`（marker、sample、classified、report）；多 profile 运行后写出 `out_dir/compare.json` 与 `compare.md`。
 
 ## 6. Profile A/B 设计（bench）
 
@@ -92,20 +92,32 @@ args = ["--process-per-site"]
 id = "renderer-limit-4"
 description = "Soft renderer cap"
 args = ["--renderer-process-limit=4"]
+
+# 可选：预置 Chromium Preferences（Memory Saver 示例）
+[[profiles]]
+id = "memory-saver-aggressive"
+description = "Memory Saver on with short lab discard"
+args = ["--enable-features=HighEfficiencyModeAvailable:time_before_discard/30s/default_state/true"]
+
+[profiles.preferences.performance_tuning.high_efficiency_mode]
+state = 2
+time_before_discard_in_minutes = 1
+aggressiveness = 2
 ```
 
 行为：
 
 - **无 `[[profiles]]`** → 单次运行；产物落在 `out_dir/` 根目录（向后兼容）。
-- **有 profiles** → 对每个 profile：使用独立 `--user-data-dir`（`out_dir/<id>/user-data`），组前/组后停止命令行匹配该目录的浏览器进程；写 `scenario-marker.json`（含 `profile_id`、`args`、`launch_args`、`user_data_dir`、`security_notes`），空闲，再 sample（按 user-data-dir 过滤）→classify→report 到 `out_dir/<profile_id>/`；最后汇总 `compare.json` / `compare.md`（`process_count`、`total_ws_bytes`、按角色聚合）。
+- **有 profiles** → 对每个 profile：使用独立 `--user-data-dir`（`out_dir/<id>/user-data`），组前/组后停止命令行匹配该目录的浏览器进程；若设置了 `preferences`，合并写入 `user-data/Default/Preferences`（嵌套键合并，不抹掉无关默认项）；写 `scenario-marker.json`（含 `profile_id`、`args`、`preferences`、`launch_args`、`user_data_dir`、`security_notes`），空闲，再 sample（按 user-data-dir 过滤）→classify→report 到 `out_dir/<profile_id>/`；最后汇总 `compare.json` / `compare.md`（`process_count`、`total_ws_bytes`、按角色聚合）。
 - **启动** — 若 `urls` 或 `args` 非空，尽力启动 Chrome/Edge（Windows 常见路径；Linux 的 `google-chrome` / `chromium`）。启动失败只打警告，**仍采样**已有进程（不使整次 bench 失败）。
 - **CLI** — `bpb bench --scenario … --browser … --out-dir …`；多 profile 时可用 `--profile <id>` 只跑其中一个。
+- **Memory Saver profiles** — `office-memory-ab`（及 `office-memory-ab-quick`）对 baseline / 激进 Memory Saver prefs / Memory Saver 关闭做 A/B。Prefs 预置 `performance_tuning.high_efficiency_mode.*`；实验室 discard 窗口故意缩短（生产默认约 120 分钟）。被 discard 的标签页在聚焦时会重载，可能低估稳态内存，直到重新激活；这**不会**关闭站点隔离。
 
-Marker/文档中的安全立场：`--process-per-site` 与 renderer 上限是在站点隔离**约束内**权衡命运共享/争用的度量旋钮，不是关闭隔离的许可。
+Marker/文档中的安全立场：`--process-per-site`、renderer 上限与 Memory Saver 是在站点隔离**约束内**权衡命运共享/争用/discard 的度量旋钮，不是关闭隔离的许可。
 
 ## 7. 后续组件（仅占位）
 
-见 [roadmap.md](roadmap.md)。近期占位（此处未实现）：多会话预算汇总、PSS 类私有归因。更丰富办公场景：已提供 `office-dense-ab`（多源标签）与 `office-samesite-ab`（同一 eTLD+1 多标签，便于 `--process-per-site` 合并渲染进程）；后续可再扩展 SaaS 集合。
+见 [roadmap.md](roadmap.md)。近期占位（此处未实现）：多会话预算汇总、PSS 类私有归因。更丰富办公场景：已提供 `office-dense-ab`（多源标签）、`office-samesite-ab`（同一 eTLD+1 多标签，便于 `--process-per-site` 合并渲染进程）与 `office-memory-ab`（Memory Saver 开/关/baseline，含 Preferences 预置）；后续可再扩展 SaaS 集合。
 
 ## 相关文档
 

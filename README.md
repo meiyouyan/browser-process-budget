@@ -48,7 +48,7 @@ cargo build
 ./target/debug/bpb bench --scenario office-basic-ab --browser chrome --out-dir ./out-ab --profile baseline
 ```
 
-`scripts/office-basic.toml` stays profile-free (single run at `out_dir` root). `scripts/office-basic-ab.toml` declares baseline / `--process-per-site` / `--renderer-process-limit=4` with a short idle for CI. For RDS process-model divergence under Site Isolation, use **`office-dense-ab`** (6–8 multi-origin URLs, `idle_seconds = 20`); optional **`office-dense-ab-quick`** (4 URLs, idle 3s) for a faster smoke on the test host. Multi-origin tabs often keep similar renderer counts across profiles; to exercise **`--process-per-site` consolidation**, use **`office-samesite-ab`** (6–8 Wikipedia pages on the same eTLD+1, idle 20s) or **`office-samesite-ab-quick`** (4 same-site URLs, idle 3s). Multi-profile runs use a dedicated `--user-data-dir` per profile, stop matching browser processes between profiles, and filter the sample to that directory so counts do not stack. None of the default profiles disable Site Isolation.
+`scripts/office-basic.toml` stays profile-free (single run at `out_dir` root). `scripts/office-basic-ab.toml` declares baseline / `--process-per-site` / `--renderer-process-limit=4` with a short idle for CI. For RDS process-model divergence under Site Isolation, use **`office-dense-ab`** (6–8 multi-origin URLs, `idle_seconds = 20`); optional **`office-dense-ab-quick`** (4 URLs, idle 3s) for a faster smoke on the test host. Multi-origin tabs often keep similar renderer counts across profiles; to exercise **`--process-per-site` consolidation**, use **`office-samesite-ab`** (6–8 Wikipedia pages on the same eTLD+1, idle 20s) or **`office-samesite-ab-quick`** (4 same-site URLs, idle 3s). For **Memory Saver / discard** A/B, use **`office-memory-ab`** (multi-origin tabs, `idle_seconds = 60`, prefs seed a short lab discard window) or **`office-memory-ab-quick`** (4 URLs, idle 15s, smoke only — full idle is needed for meaningful discard). Profiles: `baseline` / `memory-saver-aggressive` / `memory-saver-off`. Discarded tabs reload on focus and can understate steady-state memory until reactivation; lab discard windows are intentionally short (production Chrome default is ~120 minutes). Multi-profile runs use a dedicated `--user-data-dir` per profile, optionally seed `Default/Preferences`, stop matching browser processes between profiles, and filter the sample to that directory so counts do not stack. None of the default profiles disable Site Isolation.
 
 ```bash
 # Denser multi-origin A/B (RDS-oriented idle)
@@ -62,6 +62,12 @@ cargo build
 
 # Faster same-site smoke twin
 ./target/debug/bpb bench --scenario office-samesite-ab-quick --browser chrome --out-dir ./out-samesite-ab-quick
+
+# Memory Saver A/B (prefs + optional HighEfficiencyModeAvailable flags; Site Isolation kept)
+./target/debug/bpb bench --scenario office-memory-ab --browser chrome --out-dir ./out-memory-ab
+
+# Faster Memory Saver smoke (not a meaningful discard measurement)
+./target/debug/bpb bench --scenario office-memory-ab-quick --browser chrome --out-dir ./out-memory-ab-quick --profile baseline
 ```
 
 ### Fixture smoke (no live browser required)
@@ -87,7 +93,7 @@ bpb report --input /tmp/classified.json --out-dir /tmp/bpb-live --redact
 ```
 src/           Rust CLI (sample / classify / report / bench+profiles / model)
 docs/en|zh/    Architecture, security, roadmap (bilingual)
-scripts/       Bench scenarios (office-basic, office-basic-ab, office-dense-ab, office-samesite-ab, …)
+scripts/       Bench scenarios (office-basic, office-basic-ab, office-dense-ab, office-samesite-ab, office-memory-ab, …)
 examples/      Sample fixtures (redacted-friendly)
 ```
 

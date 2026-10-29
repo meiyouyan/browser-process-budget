@@ -15,7 +15,7 @@
 
 - [ ] 加固 Windows RDS 采样（会话 ID 覆盖、边界情况）
 - [x] 扩展办公场景（标签密度、常见 SaaS 页面）——`office-dense-ab`（及可选 `office-dense-ab-quick`）；同站多标签以拉开 process-per-site——`office-samesite-ab`（及 `office-samesite-ab-quick`）；仍仅度量
-- [ ] 可选将 Memory Saver / discard 相关标志做成**具名 profile**（写明权衡；永不关闭隔离）
+- [x] 可选将 Memory Saver / discard 相关标志做成**具名 profile**（`office-memory-ab` / `office-memory-ab-quick`；可选 Preferences 预置；discard 会使非活动标签页重载——可能低估稳态内存；永不关闭隔离）
 - [ ] CI：夹具 classify/report + `office-basic-ab` 冒烟（Linux 上 0 个 Chrome 进程可接受）
 
 ## 第 3–4 个月

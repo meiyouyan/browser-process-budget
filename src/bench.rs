@@ -42,6 +42,10 @@ struct Profile {
     description: String,
     #[serde(default)]
     args: Vec<String>,
+    /// Optional Chromium Preferences JSON fragment merged into
+    /// `user-data/Default/Preferences` before launch (e.g. Memory Saver prefs).
+    #[serde(default)]
+    preferences: Option<serde_json::Value>,
 }
 
 /// Default profile used when a scenario has no `[[profiles]]` (backward compat).
@@ -50,6 +54,7 @@ fn implicit_baseline() -> Profile {
         id: "baseline".into(),
         description: "Default Site Isolation (no extra args)".into(),
         args: vec![],
+        preferences: None,
     }
 }
 
@@ -135,6 +140,26 @@ pub fn run(scenario: &str, browser: &str, out_dir: &Path, profile_filter: Option
             None
         };
 
+        if let (Some(ref ud), Some(ref prefs)) = (&user_data_dir, &profile.preferences) {
+            seed_preferences(ud, prefs).with_context(|| {
+                format!(
+                    "seeding Preferences for profile '{}' under {}",
+                    profile.id,
+                    ud.display()
+                )
+            })?;
+            eprintln!(
+                "bpb bench: profile '{}': seeded Preferences under {}/Default",
+                profile.id,
+                ud.display()
+            );
+        } else if profile.preferences.is_some() && user_data_dir.is_none() {
+            eprintln!(
+                "bpb bench: profile '{}': preferences set but no user-data-dir (single-run); skipping pref seed",
+                profile.id
+            );
+        }
+
         let mut launch_args = profile.args.clone();
         if let Some(ref ud) = user_data_dir {
             launch_args.push(format!("--user-data-dir={}", ud.display()));
@@ -144,7 +169,7 @@ pub fn run(scenario: &str, browser: &str, out_dir: &Path, profile_filter: Option
 
         let launch_status = maybe_launch_browser(browser, &scen.urls, &launch_args);
 
-        let security_notes = security_notes_for(&profile.args);
+        let security_notes = security_notes_for(&profile.args, profile.preferences.as_ref());
 
         let marker = json!({
             "scenario_id": scen.id,
@@ -156,6 +181,7 @@ pub fn run(scenario: &str, browser: &str, out_dir: &Path, profile_filter: Option
             "profile_id": profile.id,
             "profile_description": profile.description,
             "args": profile.args,
+            "preferences": profile.preferences,
             "launch_args": launch_args,
             "user_data_dir": user_data_dir.as_ref().map(|p| p.display().to_string()),
             "security_notes": security_notes,
@@ -220,11 +246,23 @@ pub fn run(scenario: &str, browser: &str, out_dir: &Path, profile_filter: Option
     Ok(())
 }
 
-fn security_notes_for(args: &[String]) -> Vec<String> {
+fn security_notes_for(args: &[String], preferences: Option<&serde_json::Value>) -> Vec<String> {
     let mut notes = vec![
         "Site Isolation remains the default security posture; this lab measures process-reuse / density policies within that constraint.".to_string(),
     ];
     let joined = args.join(" ");
+    let prefs_text = preferences
+        .map(|v| v.to_string())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let mentions_memory_saver = joined.to_ascii_lowercase().contains("highefficiencymode")
+        || joined.to_ascii_lowercase().contains("high_efficiency")
+        || joined.to_ascii_lowercase().contains("memory saver")
+        || joined.to_ascii_lowercase().contains("memory-saver")
+        || prefs_text.contains("high_efficiency")
+        || prefs_text.contains("highefficiencymode")
+        || prefs_text.contains("time_before_discard")
+        || prefs_text.contains("aggressiveness");
     if joined.contains("process-per-site") {
         notes.push(
             "--process-per-site consolidates same-site renderers (fate-sharing within a site); it does not disable Site Isolation."
@@ -237,6 +275,12 @@ fn security_notes_for(args: &[String]) -> Vec<String> {
                 .into(),
         );
     }
+    if mentions_memory_saver {
+        notes.push(
+            "Memory Saver / high-efficiency discard can drop inactive tabs (they reload on focus), which may understate steady-state memory until reactivation; it does not disable Site Isolation."
+                .into(),
+        );
+    }
     if joined.contains("disable-site-isolation")
         || joined.contains("no-sandbox")
         || joined.contains("single-process")
@@ -246,10 +290,55 @@ fn security_notes_for(args: &[String]) -> Vec<String> {
                 .into(),
         );
     }
-    if args.is_empty() {
+    if args.is_empty() && preferences.is_none() {
         notes.push("Baseline: no extra Chromium flags; default Site Isolation.".into());
     }
     notes
+}
+
+/// Deep-merge `overlay` into `base` (objects merge recursively; other types overwrite).
+fn merge_json(base: &mut serde_json::Value, overlay: &serde_json::Value) {
+    match (base, overlay) {
+        (serde_json::Value::Object(base_map), serde_json::Value::Object(overlay_map)) => {
+            for (k, v) in overlay_map {
+                match base_map.get_mut(k) {
+                    Some(existing) => merge_json(existing, v),
+                    None => {
+                        base_map.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+        }
+        (base_slot, overlay_val) => {
+            *base_slot = overlay_val.clone();
+        }
+    }
+}
+
+/// Merge profile preferences into `user_data_dir/Default/Preferences` (create dirs/file as needed).
+fn seed_preferences(user_data_dir: &Path, preferences: &serde_json::Value) -> Result<()> {
+    let default_dir = user_data_dir.join("Default");
+    fs::create_dir_all(&default_dir)
+        .with_context(|| format!("creating {}", default_dir.display()))?;
+    let prefs_path = default_dir.join("Preferences");
+    let mut doc = if prefs_path.is_file() {
+        let raw = fs::read_to_string(&prefs_path)
+            .with_context(|| format!("reading {}", prefs_path.display()))?;
+        serde_json::from_str(&raw).unwrap_or_else(|_| json!({}))
+    } else {
+        json!({})
+    };
+    if !doc.is_object() {
+        doc = json!({});
+    }
+    merge_json(&mut doc, preferences);
+    fs::write(
+        &prefs_path,
+        format!("{}
+", serde_json::to_string_pretty(&doc)?),
+    )
+    .with_context(|| format!("writing {}", prefs_path.display()))?;
+    Ok(())
 }
 
 
@@ -666,9 +755,160 @@ args = ["--renderer-process-limit=4"]
 
     #[test]
     fn security_notes_flag_warnings() {
-        let notes = security_notes_for(&["--process-per-site".into()]);
+        let notes = security_notes_for(&["--process-per-site".into()], None);
         assert!(notes.iter().any(|n| n.contains("process-per-site")));
-        let warn = security_notes_for(&["--no-sandbox".into()]);
+        let warn = security_notes_for(&["--no-sandbox".into()], None);
         assert!(warn.iter().any(|n| n.contains("WARNING")));
+    }
+
+    #[test]
+    fn security_notes_memory_saver_from_prefs() {
+        let prefs = json!({
+            "performance_tuning": {
+                "high_efficiency_mode": {
+                    "state": 2,
+                    "time_before_discard_in_minutes": 1,
+                    "aggressiveness": 2
+                }
+            }
+        });
+        let notes = security_notes_for(&[], Some(&prefs));
+        assert!(notes.iter().any(|n| n.contains("Memory Saver")));
+        assert!(notes.iter().any(|n| n.contains("does not disable Site Isolation")));
+        assert!(!notes.iter().any(|n| n.contains("WARNING")));
+    }
+
+    #[test]
+    fn security_notes_memory_saver_from_args() {
+        let notes = security_notes_for(
+            &["--enable-features=HighEfficiencyModeAvailable:time_before_discard/30s/default_state/true".into()],
+            None,
+        );
+        assert!(notes.iter().any(|n| n.contains("Memory Saver")));
+    }
+
+    #[test]
+    fn parse_scenario_with_preferences() {
+        let raw = r#"
+id = "office-memory-ab"
+browser = "chrome"
+urls = []
+idle_seconds = 0
+
+[[profiles]]
+id = "baseline"
+args = []
+
+[[profiles]]
+id = "memory-saver-aggressive"
+args = ["--enable-features=HighEfficiencyModeAvailable:time_before_discard/30s/default_state/true"]
+
+[profiles.preferences.performance_tuning.high_efficiency_mode]
+state = 2
+time_before_discard_in_minutes = 1
+aggressiveness = 2
+"#;
+        let s: Scenario = toml::from_str(raw).unwrap();
+        assert_eq!(s.profiles.len(), 2);
+        assert!(s.profiles[0].preferences.is_none());
+        let prefs = s.profiles[1].preferences.as_ref().expect("prefs");
+        assert_eq!(
+            prefs["performance_tuning"]["high_efficiency_mode"]["state"],
+            2
+        );
+        assert_eq!(
+            prefs["performance_tuning"]["high_efficiency_mode"]["time_before_discard_in_minutes"],
+            1
+        );
+        assert_eq!(
+            prefs["performance_tuning"]["high_efficiency_mode"]["aggressiveness"],
+            2
+        );
+    }
+
+    #[test]
+    fn merge_json_nested_preserves_siblings() {
+        let mut base = json!({
+            "performance_tuning": {
+                "high_efficiency_mode": { "state": 0, "keep_me": true },
+                "other": 1
+            },
+            "bookmark_bar": { "show_on_all_tabs": true }
+        });
+        let overlay = json!({
+            "performance_tuning": {
+                "high_efficiency_mode": {
+                    "state": 2,
+                    "time_before_discard_in_minutes": 1,
+                    "aggressiveness": 2
+                }
+            }
+        });
+        merge_json(&mut base, &overlay);
+        assert_eq!(base["performance_tuning"]["high_efficiency_mode"]["state"], 2);
+        assert_eq!(
+            base["performance_tuning"]["high_efficiency_mode"]["time_before_discard_in_minutes"],
+            1
+        );
+        assert_eq!(base["performance_tuning"]["high_efficiency_mode"]["keep_me"], true);
+        assert_eq!(base["performance_tuning"]["other"], 1);
+        assert_eq!(base["bookmark_bar"]["show_on_all_tabs"], true);
+    }
+
+    #[test]
+    fn seed_preferences_merges_existing_file() {
+        let dir = std::env::temp_dir().join(format!(
+            "bpb-prefs-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("Default")).unwrap();
+        let prefs_path = dir.join("Default").join("Preferences");
+        fs::write(
+            &prefs_path,
+            r#"{"bookmark_bar":{"show_on_all_tabs":true},"performance_tuning":{"high_efficiency_mode":{"state":0}}}"#,
+        )
+        .unwrap();
+        let overlay = json!({
+            "performance_tuning": {
+                "high_efficiency_mode": {
+                    "state": 2,
+                    "time_before_discard_in_minutes": 1,
+                    "aggressiveness": 2
+                }
+            }
+        });
+        seed_preferences(&dir, &overlay).unwrap();
+        let raw = fs::read_to_string(&prefs_path).unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(doc["bookmark_bar"]["show_on_all_tabs"], true);
+        assert_eq!(doc["performance_tuning"]["high_efficiency_mode"]["state"], 2);
+        assert_eq!(
+            doc["performance_tuning"]["high_efficiency_mode"]["time_before_discard_in_minutes"],
+            1
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn seed_preferences_creates_default_dir() {
+        let dir = std::env::temp_dir().join(format!(
+            "bpb-prefs-create-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let overlay = json!({
+            "performance_tuning": {
+                "high_efficiency_mode": { "state": 0 }
+            }
+        });
+        seed_preferences(&dir, &overlay).unwrap();
+        let prefs_path = dir.join("Default").join("Preferences");
+        assert!(prefs_path.is_file());
+        let doc: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&prefs_path).unwrap()).unwrap();
+        assert_eq!(doc["performance_tuning"]["high_efficiency_mode"]["state"], 0);
+        let _ = fs::remove_dir_all(&dir);
     }
 }

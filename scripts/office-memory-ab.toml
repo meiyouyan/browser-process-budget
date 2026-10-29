@@ -1,0 +1,46 @@
+# A/B harness: Memory Saver (high-efficiency / discard) named profiles under Site Isolation.
+# Multi-origin office-like tabs so background tabs exist to discard. Prefs seed a short
+# discard window (lab-only; production Chrome default is ~120 minutes) so idle_seconds
+# can observe discard (WS drop / fewer live renderers). Keep Site Isolation; measurement
+# only — no disable-isolation / no-sandbox / single-process flags.
+# Trade-off: discarded tabs reload on focus and can understate steady-state memory until
+# reactivation. Short lab discard ≠ production 120m default.
+# idle_seconds = 60 gives aggressive ~1-minute discard time to fire; CI / smoke can use
+# office-memory-ab-quick (document that full idle is needed for meaningful discard).
+id = "office-memory-ab"
+description = "Multi-origin office tabs under Memory Saver on/off/baseline (Site Isolation kept; short lab discard window)"
+browser = "chrome"
+urls = [
+  "https://example.com",
+  "https://www.wikipedia.org",
+  "https://www.bing.com",
+  "https://github.com",
+  "https://www.microsoft.com",
+  "https://www.office.com",
+  "https://news.ycombinator.com",
+  "https://www.bbc.com/news",
+]
+idle_seconds = 60
+
+[[profiles]]
+id = "baseline"
+description = "Chrome defaults (no Memory Saver prefs; Site Isolation kept)"
+args = []
+
+[[profiles]]
+id = "memory-saver-aggressive"
+description = "Memory Saver enabled (state=2), discard after 1 minute, aggressiveness=2; optional HighEfficiencyModeAvailable feature param"
+args = ["--enable-features=HighEfficiencyModeAvailable:time_before_discard/30s/default_state/true"]
+
+[profiles.preferences.performance_tuning.high_efficiency_mode]
+state = 2
+time_before_discard_in_minutes = 1
+aggressiveness = 2
+
+[[profiles]]
+id = "memory-saver-off"
+description = "Memory Saver explicitly disabled (state=0); HighEfficiencyModeAvailable feature off"
+args = ["--disable-features=HighEfficiencyModeAvailable"]
+
+[profiles.preferences.performance_tuning.high_efficiency_mode]
+state = 0

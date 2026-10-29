@@ -1,0 +1,38 @@
+# Faster smoke twin of office-memory-ab (fewer URLs, short idle, more aggressive feature
+# discard param). Smoke / wiring only — full idle (office-memory-ab) is needed for
+# meaningful discard observations. Keep Site Isolation; measurement only — no
+# disable-isolation / no-sandbox / single-process flags.
+# Lab discard windows are intentionally short; production Chrome default is ~120 minutes.
+id = "office-memory-ab-quick"
+description = "Quick smoke: Memory Saver on/off/baseline with short idle (Site Isolation kept; not a meaningful discard measurement)"
+browser = "chrome"
+urls = [
+  "https://example.com",
+  "https://www.wikipedia.org",
+  "https://www.bing.com",
+  "https://github.com",
+]
+idle_seconds = 15
+
+[[profiles]]
+id = "baseline"
+description = "Chrome defaults (no Memory Saver prefs; Site Isolation kept)"
+args = []
+
+[[profiles]]
+id = "memory-saver-aggressive"
+description = "Memory Saver enabled with aggressive prefs + feature-param discard ~10s (smoke only)"
+args = ["--enable-features=HighEfficiencyModeAvailable:time_before_discard/10s/default_state/true"]
+
+[profiles.preferences.performance_tuning.high_efficiency_mode]
+state = 2
+time_before_discard_in_minutes = 1
+aggressiveness = 2
+
+[[profiles]]
+id = "memory-saver-off"
+description = "Memory Saver explicitly disabled (state=0); HighEfficiencyModeAvailable feature off"
+args = ["--disable-features=HighEfficiencyModeAvailable"]
+
+[profiles.preferences.performance_tuning.high_efficiency_mode]
+state = 0
